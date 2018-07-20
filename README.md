@@ -1,150 +1,234 @@
-# Skate
+# Web component server-side rendering and testing
 
-[![NPM version](https://img.shields.io/npm/v/skatejs.svg)](https://www.npmjs.com/package/skatejs)
-[![Build Status](https://travis-ci.org/skatejs/skatejs.svg?branch=master)](https://travis-ci.org/skatejs/skatejs)
-[![Downloads per month](https://img.shields.io/npm/dm/skatejs.svg)](https://www.npmjs.com/package/skatejs)
-[![OpenCollective](https://opencollective.com/skatejs/backers/badge.svg)](#backers)
-[![OpenCollective](https://opencollective.com/skatejs/sponsors/badge.svg)](#sponsors)
-[![Join the chat at https://gitter.im/skatejs/skatejs](https://badges.gitter.im/skatejs/skatejs.svg)](https://gitter.im/skatejs/skatejs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Follow @skate_js on Twitter](https://img.shields.io/twitter/follow/skate_js.svg?style=social&label=@skate_js)](https://twitter.com/skate_js)
+[![Build Status](https://travis-ci.org/skatejs/ssr.svg?branch=master)](https://travis-ci.org/skatejs/ssr)
 
-Skate is a functional abstraction over
-[the web component standards](https://github.com/w3c/webcomponents) that:
+This repo contains all you need to server-side render your web components and
+run their tests in a node environment.
 
-* Produces cross-framework compatible components.
-* Abstracts away common attribute / property semantics via `props` or native types, such as
-  attribute reflection and coercion.
-* Adds several lifecycle callbacks for responding to prop updates, rendering and
-  updating, as well as a way to manage internal component state.
-* Provides a base set of
-  [mixins](http://justinfagnani.com/2015/12/21/real-mixins-with-javascript-classes/)
-  that hook into renderers such as
-  [@skatejs/renderer-preact](https://github.com/skatejs/skatejs/tree/master/packages/renderer-preact).
+* Uses [`undom`](https://github.com/developit/undom) for a minimal DOM API in
+  Node.
+* Great for rendering out static sites from components.
+* Run your tests in Jest!
+* Statically generate JS files to HTML files.
 
 ## Installing
 
-Skate is on NPM:
-
-```sh
-npm install skatejs
 ```
-
-The core principle of Skate is to provide abstractions for writing custom
-elements based on best-practices; things that aren't controversial. However,
-templating can be highly contentious. For this reason, Skate provides a hook to
-inject renderers for any view library. For example, if you wanted to write your
-custom elements with Preact, you'd install it like so:
-
-```sh
-npm install skatejs @skatejs/renderer-preact preact
+npm install @skatejs/ssr
 ```
-
-There are renderers for many popular view libraries:
-
-* [LitHTML](https://skatejs.netlify.com/renderers/with-lit-html)
-* [Preact](https://skatejs.netlify.com/renderers/with-preact)
-* [React](https://skatejs.netlify.com/renderers/with-react)
-* Or a [custom renderer](https://skatejs.netlify.com/renderers)!
 
 ## Usage
 
-This is how you might write a web component using Skate and Preact:
+_This example is using vanilla custom elements and shadow DOM in order to show
+that it can work with any web component library._
+
+On the server (`example.js`):
 
 ```js
-// @jsx h
+require('@skatejs/ssr/register');
+const render = require('@skatejs/ssr');
 
-import { props, withComponent } from 'skatejs';
-import withPreact from '@skatejs/renderer-preact';
-import { h } from 'preact';
-
-class WithPreact extends withComponent(withPreact()) {
-  static get props() {
-    return {
-      name: props.string // String could be used also to define the prop type
-    };
-  }
-  render({ name }) {
-    return <span>Hello, {name}!</span>;
+class Hello extends HTMLElement {
+  connectedCallback() {
+    const shadowRoot = this.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML =
+      '<span>Hello, <x-yell><slot></slot></x-yell>!</span>';
   }
 }
+class Yell extends HTMLElement {
+  connectedCallback() {
+    Promise.resolve().then(() => {
+      const shadowRoot = this.attachShadow({ mode: 'open' });
+      shadowRoot.innerHTML = '<strong><slot></slot></strong>';
+    });
+  }
+}
+customElements.define('x-hello', Hello);
+customElements.define('x-yell', Yell);
 
-customElements.define('with-preact', WithPreact);
+const hello = new Hello();
+hello.textContent = 'World';
+
+render(hello).then(console.log);
 ```
 
-## Getting started
+And then just `node` your server code:
 
-To get up and running with Skate, head over to the
-[getting started guide](https://skatejs.netlify.com/guides/getting-started).
+```
+$ node example.js
+<script>function __ssr(){var a=document.currentScript.previousElementSibling,b=a.firstElementChild;a.removeChild(b);for(var c=a.attachShadow({mode:"open"});b.hasChildNodes();)c.appendChild(b.firstChild);}</script><x-hello><shadow-root><span>Hello, <x-yell><shadow-root><strong><slot></slot></strong></shadow-root><slot></slot></x-yell><script>__ssr()</script>!</span></shadow-root>World</x-hello><script>__ssr()</script>
+```
 
-## Polyfills
+On the client, just inline your server-rendered string:
 
-Skate builds upon the
-[Custom Elements](https://w3c.github.io/webcomponents/spec/custom/) and
-[the Shadow DOM](https://w3c.github.io/webcomponents/spec/shadow/) standards.
-Skate is capable of operating without the Shadow DOM &mdash; it just means you
-don't get any encapsulation of your component's HTML or styles. It also means
-that it's up to you to provide a way to project content (i.e. `<slot>`). It's
-highly recommended you use Shadow DOM whenever possible.
+```html
+<script>function __ssr(){var a=document.currentScript.previousElementSibling,b=a.firstElementChild;a.removeChild(b);for(var c=a.attachShadow({mode:"open"});b.hasChildNodes();)c.appendChild(b.firstChild);}</script><x-hello><shadow-root><span>Hello, <x-yell><shadow-root><strong><slot></slot></strong></shadow-root><slot></slot></x-yell><script>__ssr()</script>!</span></shadow-root>World</x-hello><script>__ssr()</script>
+```
 
-Though most modern browsers support these standards, some still need polyfills
-to implement missing or inconsistent behaviours for them.
+[See it in action!](http://jsbin.com/cilocowozu/2/edit?html,output)
 
-For more information on the polyfills, see
-[the web components polyfill documentation](https://github.com/webcomponents/webcomponentsjs).
+## API
 
-## Browser Support
+The only function this library exposes is `render()`. The first argument is the
+DOM tree you want to render. It can be a `document` node or any HTML node. The
+second argument are the options to customise rendering. These options are:
 
-Skate supports all evergreens and IE11, and is subject to the browser support
-matrix of the polyfills.
+* `debug` - Whether or not to pretty print the HTML result. Defaults to `false`.
+* `rehydrate` - Whether or not to add the inline rehydration scripts. Defaults
+  to `true`.
+* `resolver` - The function to call that will resolve the promise. Defaults to
+  `setTimeout`.
 
-## Backers
+## Running in Node
 
-Support us with a monthly donation and help us continue our activities.
-[Become a backer](https://opencollective.com/skatejs#backer)!
+If you want to run your code in Node, just require the registered environment
+before doing anything DOMish.
 
-[![](https://opencollective.com/skatejs/backer/0/avatar.svg)](https://opencollective.com/skatejs/backer/0/website)
-[![](https://opencollective.com/skatejs/backer/1/avatar.svg)](https://opencollective.com/skatejs/backer/1/website)
-[![](https://opencollective.com/skatejs/backer/2/avatar.svg)](https://opencollective.com/skatejs/backer/2/website)
-[![](https://opencollective.com/skatejs/backer/3/avatar.svg)](https://opencollective.com/skatejs/backer/3/website)
-[![](https://opencollective.com/skatejs/backer/4/avatar.svg)](https://opencollective.com/skatejs/backer/4/website)
-[![](https://opencollective.com/skatejs/backer/5/avatar.svg)](https://opencollective.com/skatejs/backer/5/website)
-[![](https://opencollective.com/skatejs/backer/6/avatar.svg)](https://opencollective.com/skatejs/backer/6/website)
-[![](https://opencollective.com/skatejs/backer/7/avatar.svg)](https://opencollective.com/skatejs/backer/7/website)
-[![](https://opencollective.com/skatejs/backer/8/avatar.svg)](https://opencollective.com/skatejs/backer/8/website)
-[![](https://opencollective.com/skatejs/backer/9/avatar.svg)](https://opencollective.com/skatejs/backer/9/website)
-[![](https://opencollective.com/skatejs/backer/10/avatar.svg)](https://opencollective.com/skatejs/backer/10/website)
-[![](https://opencollective.com/skatejs/backer/11/avatar.svg)](https://opencollective.com/skatejs/backer/11/website)
-[![](https://opencollective.com/skatejs/backer/12/avatar.svg)](https://opencollective.com/skatejs/backer/12/website)
-[![](https://opencollective.com/skatejs/backer/13/avatar.svg)](https://opencollective.com/skatejs/backer/13/website)
-[![](https://opencollective.com/skatejs/backer/14/avatar.svg)](https://opencollective.com/skatejs/backer/14/website)
-[![](https://opencollective.com/skatejs/backer/15/avatar.svg)](https://opencollective.com/skatejs/backer/15/website)
-[![](https://opencollective.com/skatejs/backer/16/avatar.svg)](https://opencollective.com/skatejs/backer/16/website)
-[![](https://opencollective.com/skatejs/backer/17/avatar.svg)](https://opencollective.com/skatejs/backer/17/website)
-[![](https://opencollective.com/skatejs/backer/18/avatar.svg)](https://opencollective.com/skatejs/backer/18/website)
-[![](https://opencollective.com/skatejs/backer/19/avatar.svg)](https://opencollective.com/skatejs/backer/19/website)
+```js
+// index.js
+require('@skatejs/ssr/register');
 
-## Sponsors
+// DOM stuff...
+```
 
-Become a sponsor and get your logo on our README on Github with a link to your
-site. [Become a sponsor](https://opencollective.com/skatejs#sponsor)!
+## Running in Jest
 
-[![](https://opencollective.com/skatejs/sponsor/0/avatar.svg)](https://opencollective.com/skatejs/sponsor/0/website)
-[![](https://opencollective.com/skatejs/sponsor/1/avatar.svg)](https://opencollective.com/skatejs/sponsor/1/website)
-[![](https://opencollective.com/skatejs/sponsor/2/avatar.svg)](https://opencollective.com/skatejs/sponsor/2/website)
-[![](https://opencollective.com/skatejs/sponsor/3/avatar.svg)](https://opencollective.com/skatejs/sponsor/3/website)
-[![](https://opencollective.com/skatejs/sponsor/4/avatar.svg)](https://opencollective.com/skatejs/sponsor/4/website)
-[![](https://opencollective.com/skatejs/sponsor/5/avatar.svg)](https://opencollective.com/skatejs/sponsor/5/website)
-[![](https://opencollective.com/skatejs/sponsor/6/avatar.svg)](https://opencollective.com/skatejs/sponsor/6/website)
-[![](https://opencollective.com/skatejs/sponsor/7/avatar.svg)](https://opencollective.com/skatejs/sponsor/7/website)
-[![](https://opencollective.com/skatejs/sponsor/8/avatar.svg)](https://opencollective.com/skatejs/sponsor/8/website)
-[![](https://opencollective.com/skatejs/sponsor/9/avatar.svg)](https://opencollective.com/skatejs/sponsor/9/website)
-[![](https://opencollective.com/skatejs/sponsor/10/avatar.svg)](https://opencollective.com/skatejs/sponsor/10/website)
-[![](https://opencollective.com/skatejs/sponsor/11/avatar.svg)](https://opencollective.com/skatejs/sponsor/11/website)
-[![](https://opencollective.com/skatejs/sponsor/12/avatar.svg)](https://opencollective.com/skatejs/sponsor/12/website)
-[![](https://opencollective.com/skatejs/sponsor/13/avatar.svg)](https://opencollective.com/skatejs/sponsor/13/website)
-[![](https://opencollective.com/skatejs/sponsor/14/avatar.svg)](https://opencollective.com/skatejs/sponsor/14/website)
-[![](https://opencollective.com/skatejs/sponsor/15/avatar.svg)](https://opencollective.com/skatejs/sponsor/15/website)
-[![](https://opencollective.com/skatejs/sponsor/16/avatar.svg)](https://opencollective.com/skatejs/sponsor/16/website)
-[![](https://opencollective.com/skatejs/sponsor/17/avatar.svg)](https://opencollective.com/skatejs/sponsor/17/website)
-[![](https://opencollective.com/skatejs/sponsor/18/avatar.svg)](https://opencollective.com/skatejs/sponsor/18/website)
-[![](https://opencollective.com/skatejs/sponsor/19/avatar.svg)](https://opencollective.com/skatejs/sponsor/19/website)
+If you want to run your tests in Jest, all you have to do is configure Jest to
+use the environment we've provided for it.
+
+```js
+// package.json
+{
+  "jest": {
+    "testEnvironment": "@skatejs/ssr/jest"
+  }
+}
+```
+
+## Static-site generation
+
+This package ships with a command that you can use to statically generate a site
+from JS files.
+
+* It uses babel-register to parse your JS files.
+* Each JS file must have a default export that is a custom element.
+
+```sh
+ssr --out public --src path/to/site/**/*.js
+```
+
+Options are:
+
+* `--babel` - Path to custom babel config. Uses `require()` to load relative to
+  `process.cwd()`. Defaults to `.babelrc` / `package.json` field.
+* `--debug` - Whether or not to pretty print the HTML result. Defaults to
+  `false`.
+* `--out` - The directory to place the statically rendered files.
+* `--props` - A JSON object of custom props to assign to the custom elements
+  before they're rendered.
+* `--rehydrate` - Whether or not to add rehydration scripts. Defaults to `true`.
+* `--src` - A glob for the source files to statically render to `--out`.
+* `--suffix` - The suffix to put on the output files. Defaults to `html`;
+
+### Watching files and generating them in dev mode
+
+You can use something like `nodemon` to watch for updates and then regenerate
+your site:
+
+```sh
+nodemon --exec "ssr --out public --src path/to/site/**/*.js" --watch path/to/site
+```
+
+## Running with other Node / DOM implementations
+
+There's other implementations out there such as
+[Domino](https://github.com/fgnass/domino) and
+[JSDOM](https://github.com/tmpvar/jsdom). They don't yet have support for custom
+elements or shadow DOM, but if they did, then you would use this library in the
+same way, just without requiring `@skatejs/ssr/register`. With some
+implementations that don't yet support web components, requiring
+`@skatejs/ssr/register` may work, but your mileage may vary. Currently only
+Undom is officially supported.
+
+## The future
+
+The definition of success for this library is if it can be made mostly
+redundant. Things like a DOM implementation in Node (JSDOM / UnDOM, etc) are
+still necessary. The static-site generation will probably still be a thing.
+However, we hope that the serialisation and rehydration of Shadow DOM can be
+spec'd - in some way - and a standardised API for doing so makes it's way to the
+platform.
+
+Serialisation may still be done in a Node DOM implementation, but it'd be great
+to see it standardised beacuse it is tightly coupled to the rehydration step on
+the client. This also helps to ensure that if an imperative distrubution API
+ever makes its way into the spec, that both serialisation and rehydration may be
+accounted for.
+
+## Notes
+
+There's some notes and limitations that you should be aware of.
+
+### Scoped styles
+
+Scoped styles are emulated by scoping class names only. This means you are
+limited to using only class names within your shadow root `<style />` tags:
+
+```html
+<style>
+  .some-class {}
+</style>
+```
+
+It will make that class name unique and scope it to the shadow roots that use
+it.
+
+Support for both `:host` and `:slotted` still need to be implemented.
+
+Style tags are also deduped. This means that if you use a `<style />` element
+that has the same content in several places, it will only be added to the head
+once. If you enable rehydration, it will pull from that script tag directly when
+attaching a shadow root.
+
+### DOM API limitations
+
+You're limited to the subset of DOM methods available through Undom, plus what
+we add on top of it (which is quite a bit at the moment). Undom works well with
+Preact and SkateJS due to their mininmal overhead and limited native DOM
+interface usage.
+
+There's currently [some work](https://github.com/tmpvar/jsdom/pull/1872)
+happening to get custom element and shadow DOM support in JSDOM. Once that
+lands, we'll have broader API support and we can start thikning about focusing
+this API on just serialisation and rehydration.
+
+### Misc
+
+* Performance benchmarks focus on comparing a baseline to different methods of
+  rehydration. Thanks to @robdodson for sharing some code that helped me flesh
+  these out. Spin up a static server and load them up for more details.
+* Inline `<script>` tags use relative DOM accessors like
+  `document.currentScript`, `previousElementSibling` and `firstElementChild`.
+  Any HTML post-processing could affect the mileage of it, so beware.
+* Inline `<script>` method is currently the fastest overall method of
+  rehydration. This has been discussed
+  [elsewhere](https://discourse.wicg.io/t/declarative-shadow-dom/1904/8) but the
+  difference between methods seemed more pronounced, possibly because things
+  were deduped in a single `<template>` which isn't really possible because most
+  components will be rendered in a different state. Also, cralers don't read
+  content in `<template>` elements, so we need to store it in non-inert blocks.
+* Using a custom `<shadow-root>` element seems acceptable for performance,
+  however there's some problems with delivering it:
+  * Do we ship an ES5 or ES6 component? ES5 requires transpilation and shims.
+    ES6 excludes older browsers.
+  * We could make the consumer ship the element themselves and provide helpers
+    they call out to, but that's more friction.
+  * This is probably a better method once we can assume custom elements / ES2015
+    support in all targeted browsers.
+* Shadow root content, prior to being hydrated, is _not_ inert so that it can be
+  found by `querySelector` and crawlers. Putting it inside of a `<template>` tag
+  means that it's not participating in the document and the aforementioned
+  wouldn't work, thus negating the benefits of SSR altogether.
+* Using invalid HTML, such as putting a `<div />` in a `<p />` tag could result
+  in broken rehydration because the browser may try and "fix" the incorrect
+  line, thus making things out of sync with what the rehydration script expects.
