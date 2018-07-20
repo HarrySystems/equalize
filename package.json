@@ -25,6 +25,6 @@
     "jest.js",
     "utils.js"
   ],
-  "name": "@skatejs/ssr",
-  "version": "0.19.6"
+  "name": "equalize",
+  "version": "0.20.0"
 }
